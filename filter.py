@@ -10,7 +10,7 @@ import cv2
 import json
 from models import build_model
 from args import get_args_parser
-from plot import plot_results, timelog
+from plot import plot_results, timelog, outputaction
 from flask import Flask, request, Response, send_file 
 from flask_cors import CORS, cross_origin
 from requests_toolbelt import MultipartEncoder
@@ -88,12 +88,15 @@ def upload_file():
                 frame = plot_results(frame, labelss, boxes, verb)
                 out.write(frame)
                 if timelog(verb) == True:
-                    t = cap.get(cv2.CAP_PROP_POS_MSEC)
-                    time_log.append(int(t*1000))
+                    t = cap.get(cv2.CAP_PROP_POS_MSEC)/1000
+                    t = round(t,2)
+                    output_action = outputaction(verb)
+                    time_log.append((t,output_action))
                 if cv2.waitKey(27) & 0xFF == 27:
                     break
             else:
                 break
+
         cap.release()
         out.release()
         cv2.destroyAllWindows()
