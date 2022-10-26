@@ -70,11 +70,11 @@ async def filter_image(sid, data):
     count = data['count']
     if count < 5:
         await sio.emit('filter', {# 'img': data['origin'], 
-            'bbox': [], 'verb': [], 'count': count})
+            'bbox': [], 'verb': -1, 'count': count, 'time': data['time']})
     else:
         t = time.time()
         image = data['rgb']
-        img = Image.frombytes(mode="RGB", size=(400, 300), data=image)
+        img = Image.frombytes(mode="RGB", size=(300, 400), data=image)
         img = transform(img).unsqueeze(0).to(device)
         outputs = model(img) 
         preds = postprocessors['hoi'](outputs, orig_target_sizes)
@@ -82,18 +82,19 @@ async def filter_image(sid, data):
         score = preds[0]['verb_scores'] # 100, 117
         actions = score.max(-1)
         idx = np.argmax(actions.values)
-        box = []
-        box.append(bbox[idx].tolist())
-        box.append(bbox[idx+100].tolist())
-        act = actions.indices[idx]
-        verb = []
-        verb.append(ACTIONS[act])
-        await sio.emit('filter', {# 'img': data['origin'], 
-            'bbox': box, 'verb': verb, 'count': count})
-    cnt += 1
-    if cnt % 20 == 0:
-        print("1s: ", time.time() - start)
-        start = time.time()
+        if actions.values[idx] < 0.2:
+            await sio.emit('filter', {'bbox': [0,0,0,0], 'verb': 0, 'count': count, 'time': data['time']})
+        else:
+            box = []
+            box.append(bbox[idx].tolist())
+            box.append(bbox[idx+100].tolist())
+            act = actions.indices[idx]
+            verb = []
+            verb.append(ACTIONS[act])
+            ind = ACTIONS.index(verb[0])
+            print(verb)
+            await sio.emit('filter', {'bbox': box, 'verb': ind, 'count': count, 'time': data['time']})
+
 
 web.run_app(app, host="127.0.0.1", port=7080)
 # fix the seed for reproducibility
