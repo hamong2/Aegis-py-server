@@ -89,5 +89,11 @@ def timelog(verbs):
       break
   return violence
 
-    
+# to get harmful action
+def outputaction(verbs):
+  for i,verb in enumerate(verbs):
+    if ACTIONS[verb] in need_mosaic:
+      output = ACTIONS[verb]
+      break
+  return output
 
