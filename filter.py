@@ -63,37 +63,40 @@ def upload_file():
         while cap.isOpened():
             ret, frame = cap.read()
             if ret == True:
-                F_cnt += 1
-                if F_cnt == 1:
-                    frames = transform(frame).unsqueeze(0).to(device)
-                    outputs = model(frames)
-                    preds =  postprocessors['hoi'](outputs, orig_target_sizes)
-                    labels = preds[0]['labels']
-                    box = preds[0]['boxes']
-                    score = preds[0]['verb_scores']
-                    actions = score.max(-1)
-                    idxs = []
-                    max_idx = np.argmax(actions.values)
-                    if actions.values[max_idx] > 0.4:
-                        idxs.append(max_idx)
-                    labelss = []
-                    verb = []
-                    for i in idxs:
-                        boxes.append(box[i])
-                        boxes.append(box[i+100])
-                        labelss.append(labels[i])
-                        labelss.append(labels[i+100])
-                        verb.append(actions.indices[i])
-                    if timelog(verb) == True:
-                        t = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
-                        t = round(t, 2)
-                        output_action = outputaction(verb)
-                        time_log.append((t, output_action))
+                frames = transform(frame).unsqueeze(0).to(device)
+                outputs = model(frames)
+                preds =  postprocessors['hoi'](outputs, orig_target_sizes)
+                labels = preds[0]['labels']
+                box = preds[0]['boxes']
+                score = preds[0]['verb_scores']
+                actions = score.max(-1)
+                idxs = []
+                max_idx = np.argmax(actions.values)
+                if actions.values[max_idx] > 0.4:
+                    idxs.append(max_idx)
+                boxes = []
+                labelss = []
+                verb = []
+                for i in idxs:
+                    boxes.append(box[i])
+                    boxes.append(box[i+100])
+                    labelss.append(labels[i])
+                    labelss.append(labels[i+100])
+                    verb.append(actions.indices[i])
+
                 frame = plot_results(frame, labelss, boxes, verb)
                 out.write(frame)
+
+                F_cnt += 1
+                if F_cnt == 1:
+                    if timelog(verb) == True:
+                        t = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+                        t = round(cap.get(cv2.CAP_PROP_POS_MSEC) / 1000, 2)
+                        output_action = outputaction(verb)
+                        time_log.append((t, output_action))
                 if F_cnt == 10:
                     F_cnt = 0
-                    boxes = []
+
                 if cv2.waitKey(27) & 0xFF == 27:
                     break
             else:
