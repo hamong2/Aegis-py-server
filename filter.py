@@ -44,54 +44,56 @@ app = Flask(__name__)
 CORS(app)
 @app.route('/upload', methods=["GET","POST"])
 def upload_file():
+    if request.method == "GET":
+        return send_file('./vfilter.mov', download_name="filter.mov", as_attachment=True)
     if request.method == "POST":
-        print(request)
+        F_cnt = 0
         f = request.files['file']
-        print(f)
-        f.save('./tmp.mp4')
+        f.save('./tmp.mov')
         time_log = []
-        cap = cv2.VideoCapture('./tmp.mp4')
-        print(cap)
+        cap = cv2.VideoCapture('./tmp.mov')
         w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         frame_width = int(cap.get(3))
         frame_height = int(cap.get(4))
         orig_target_sizes = torch.as_tensor([[int(frame_height), int(frame_width)]])
-        out = cv2.VideoWriter('./vfilter.mp4', cv2.VideoWriter_fourcc(*'MJPG'), 30.0, (int(w), int(h)))
+        out = cv2.VideoWriter('./vfilter.mov', cv2.VideoWriter_fourcc(*'MJPG'), 30.0, (int(w), int(h)))
         print(f)        
+        boxes = []
         while cap.isOpened():
             ret, frame = cap.read()
             if ret == True:
-                frames = transform(frame).unsqueeze(0).to(device)
-                outputs = model(frames)
-                preds =  postprocessors['hoi'](outputs, orig_target_sizes)
-                labels = preds[0]['labels']
-                box = preds[0]['boxes']
-                score = preds[0]['verb_scores']
-                actions = score.max(-1)
-                idxs = []
-                for i, action in enumerate(actions.values):
-                    if action > 0.125:
-                        if actions.indices[i] == 118:
-                            idxs.append(i)
-                            break
-                boxes = []
-                labelss = []
-                verb = []
-                for i in idxs:
-                    boxes.append(box[i])
-                    boxes.append(box[i+100])
-                    labelss.append(labels[i])
-                    labelss.append(labels[i+100])
-                    verb.append(actions.indices[i])
-
+                F_cnt += 1
+                if F_cnt == 1:
+                    frames = transform(frame).unsqueeze(0).to(device)
+                    outputs = model(frames)
+                    preds =  postprocessors['hoi'](outputs, orig_target_sizes)
+                    labels = preds[0]['labels']
+                    box = preds[0]['boxes']
+                    score = preds[0]['verb_scores']
+                    actions = score.max(-1)
+                    idxs = []
+                    max_idx = np.argmax(actions.values)
+                    if actions.values[max_idx] > 0.4:
+                        idxs.append(max_idx)
+                    labelss = []
+                    verb = []
+                    for i in idxs:
+                        boxes.append(box[i])
+                        boxes.append(box[i+100])
+                        labelss.append(labels[i])
+                        labelss.append(labels[i+100])
+                        verb.append(actions.indices[i])
+                    if timelog(verb) == True:
+                        t = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+                        t = round(t, 2)
+                        output_action = outputaction(verb)
+                        time_log.append((t, output_action))
                 frame = plot_results(frame, labelss, boxes, verb)
                 out.write(frame)
-                if timelog(verb) == True:
-                    t = cap.get(cv2.CAP_PROP_POS_MSEC)/1000
-                    t = round(t,2)
-                    output_action = outputaction(verb)
-                    time_log.append((t,output_action))
+                if F_cnt == 10:
+                    F_cnt = 0
+                    boxes = []
                 if cv2.waitKey(27) & 0xFF == 27:
                     break
             else:

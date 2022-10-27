@@ -12,21 +12,19 @@ import socketio
 import time
 from args import get_args_parser
 
-ACTIONS = ['adjust', 'assemble', 'block', 'blow', 'board', 'break', 'brush_with', 'buy', 'carry', 'catch',
-           'chase', 'check', 'clean', 'control', 'cook', 'cut', 'cut_with', 'direct', 'drag', 'dribble',
+ACTIONS = ['adjust', 'assemble', 'block', 'blow', 'board', 'break', 'brush_with', 'buy', 'carry', 'catch', 
+           'chase', 'check', 'clean', 'control', 'cook', 'cut', 'cut_with', 'direct', 'drag', 'dribble', 
             'drink_with', 'drive', 'dry', 'eat', 'eat_at', 'exit', 'feed', 'fill', 'flip', 'flush', 'fly',
-            'greet', 'grind', 'groom', 'herd', 'hit', 'hold', 'hop_on', 'hose', 'hug', 'hunt', 'inspect',
-            'install', 'jump', 'kick', 'kiss', 'lasso', 'launch', 'lick', 'lie_on', 'lift', 'light', 'load',
+            'greet', 'grind', 'groom', 'herd', 'hit', 'hold', 'hop_on', 'hose', 'hug', 'hunt', 'inspect', 
+            'install', 'jump', 'kick', 'kiss', 'lasso', 'launch', 'lick', 'lie_on', 'lift', 'light', 'load', 
             'lose', 'make', 'milk', 'move', 'no_interaction', 'open', 'operate', 'pack', 'paint', 'park', 'pay',
-            'peel', 'pet', 'pick', 'pick_up', 'point', 'pour', 'pull', 'push', 'race', 'read', 'release',
-            'repair', 'ride', 'row', 'run', 'sail', 'scratch', 'serve', 'set', 'shear', 'sign', 'sip',
-            'sit_at', 'sit_on', 'slide', 'smell', 'spin', 'squeeze', 'stab', 'stand_on', 'stand_under',
-            'stick', 'stir', 'stop_at', 'straddle', 'swing', 'tag', 'talk_on', 'teach', 'text_on', 'throw',
-            'tie', 'toast', 'train', 'turn', 'type_on', 'walk', 'wash', 'watch', 'wave', 'wear', 'wield', 'zip',
-
-             'violence', 'strangle', 'smoke', 'cook', 'stabe'
+            'peel', 'pet', 'pick', 'pick_up', 'point', 'pour', 'pull', 'push', 'race', 'read', 'release', 
+            'repair', 'ride', 'row', 'run', 'sail', 'scratch', 'serve', 'set', 'shear', 'sign', 'sip', 
+            'sit_at', 'sit_on', 'slide', 'smell', 'spin', 'squeeze', 'stab', 'stand_on', 'stand_under', 
+            'stick', 'stir', 'stop_at', 'straddle', 'swing', 'tag', 'talk_on', 'teach', 'text_on', 'throw', 
+            'tie', 'toast', 'train', 'turn', 'type_on', 'walk', 'wash', 'watch', 'wave', 'wear', 'wield', 'zip', 
+            'fuck_you', 'smoke', 'stab', 'strangle', 'violence'
             ]
-
 sio = socketio.AsyncServer(cors_allowed_origins="*",
                            logger=False,
                            max_http_buffer_size=10**18)
@@ -43,12 +41,12 @@ random.seed(seed)
 model, postprocessors = build_model(args)
 model.to(device)
 
-checkpoint = torch.load(args.pretrained, map_location="cuda")
+checkpoint = torch.load('./checkpoint.pth', map_location="cpu")
 model.load_state_dict(checkpoint['model'], strict=False)
 
 orig_target_sizes =  torch.as_tensor([[300, 400]])
 transform = T.Compose([
-        T.Resize(800),
+        T.Resize(800, interpolation=Image.BICUBIC),
         T.ToTensor(),
         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
@@ -69,8 +67,7 @@ async def filter_image(sid, data):
         start = time.time()
     count = data['count']
     if count < 5:
-        await sio.emit('filter', {# 'img': data['origin'], 
-            'bbox': [], 'verb': -1, 'count': count, 'time': data['time']})
+        await sio.emit('filter', {'verb': -1, 'count': count})
     else:
         t = time.time()
         image = data['rgb']
@@ -82,8 +79,8 @@ async def filter_image(sid, data):
         score = preds[0]['verb_scores'] # 100, 117
         actions = score.max(-1)
         idx = np.argmax(actions.values)
-        if actions.values[idx] < 0.2:
-            await sio.emit('filter', {'bbox': [0,0,0,0], 'verb': 0, 'count': count, 'time': data['time']})
+        if actions.values[idx] < 0.5:
+            await sio.emit('filter', {'bbox': [0,0,0,0], 'verb': 0, 'count': count})
         else:
             box = []
             box.append(bbox[idx].tolist())
@@ -93,7 +90,7 @@ async def filter_image(sid, data):
             verb.append(ACTIONS[act])
             ind = ACTIONS.index(verb[0])
             print(verb)
-            await sio.emit('filter', {'bbox': box, 'verb': ind, 'count': count, 'time': data['time']})
+            await sio.emit('filter', {'bbox': box, 'verb': ind, 'count': count})
 
 
 web.run_app(app, host="127.0.0.1", port=7080)
